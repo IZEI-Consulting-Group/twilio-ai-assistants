@@ -1,7 +1,16 @@
+/**
+ * @typedef {import('../../../assets/utils.private')} Utils
+ * @typedef {import('../../../assets/logger.private')} Logger
+ */
+
+/** @type {Utils} */
 const {
   verifyRequest,
   readConversationAttributes,
 } = require(Runtime.getAssets()["/utils.js"].path);
+
+/** @type {Logger} */
+const { TwilioLogger } = require(Runtime.getAssets()["/logger.js"].path);
 
 /**
  * @param {import('@twilio-labs/serverless-runtime-types/types').Context} context
@@ -9,18 +18,23 @@ const {
  * @param {import('@twilio-labs/serverless-runtime-types/types').ServerlessCallback} callback
  */
 exports.handler = async function (context, event, callback) {
+  const logger = new TwilioLogger(context, "RESPONSE_AI", {
+    initialEvent: event,
+  });
+  logger.info("INIT");
+
   try {
     if (!verifyRequest(context, event)) {
+      logger.error("INVALID_TOKEN");
       return callback(new Error("Invalid token"));
     }
-    console.log("response", event);
     const assistantIdentity =
       typeof event._assistantIdentity === "string"
         ? event._assistantIdentity
         : undefined;
 
     if (event.Status === "Failed") {
-      console.error(event);
+      logger.error("FAILED", { assistantIdentity });
       return callback(
         new Error("Failed to generate response. Check error logs.")
       );
@@ -33,6 +47,7 @@ exports.handler = async function (context, event, callback) {
       ""
     ).split("/");
     const body = event.Body;
+    logger.info("VARIABLES", { serviceSid, conversationsSid, body });
 
     const attributes = await readConversationAttributes(
       context,
@@ -54,11 +69,11 @@ exports.handler = async function (context, event, callback) {
         author: assistantIdentity,
       });
 
-    console.log(`conversation message sent ${message.sid}`);
+    logger.info("SUCCESS", message);
 
     return callback(null, {});
   } catch (err) {
-    console.error(err);
+    logger.error("ERROR", err);
     return callback(null, {});
   }
 };

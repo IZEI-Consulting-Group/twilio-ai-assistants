@@ -6,7 +6,6 @@
 /** @type {Utils} */
 const {
   signRequest,
-  getAssistantSid,
   sendMessageToAssistant,
   readConversationAttributes,
 } = require(Runtime.getAssets()["/utils.js"].path);
@@ -20,46 +19,33 @@ const { TwilioLogger } = require(Runtime.getAssets()["/logger.js"].path);
  * @param {import('@twilio-labs/serverless-runtime-types/types').ServerlessCallback} callback
  */
 exports.handler = async function (context, event, callback) {
-  const logger = new TwilioLogger(context, "MESSAGE_ADDED", {
+  const logger = new TwilioLogger(context, "SEND_TO_ASSISTANT", {
     initialEvent: event,
   });
   logger.info("INIT");
-  const assistantSid = await getAssistantSid(context, event);
 
-  const { ConversationSid, ChatServiceSid, Author } = event;
+  const { ConversationSid, ChatServiceSid, Author, Body, AssistantSid } = event;
   const AssistantIdentity =
     typeof event.AssistantIdentity === "string"
       ? event.AssistantIdentity
       : undefined;
 
   const identity = Author.includes(":") ? Author : `user_id:${Author}`;
-  logger.info("VARIABLES", { assistantSid, identity });
 
   const client = context.getTwilioClient();
 
-  const webhooks = (
-    await client.conversations.v1
-      .services(ChatServiceSid)
-      .conversations(ConversationSid)
-      .webhooks.list()
-  ).filter((entry) => entry.target === "studio");
-
-  if (webhooks.length > 0) {
-    logger.info("STUDIO_WEBHOOK_SET");
-    // ignoring if the conversation has a studio webhook set (assuming it was handed over)
-    return callback(null, "");
-  }
-
-  const participants = await client.conversations.v1
+  const conversation = client.conversations.v1
     .services(ChatServiceSid)
-    .conversations(ConversationSid)
-    .participants.list();
-
-  if (participants.length > 1) {
-    logger.info("MULTIPLE_HUMANS");
-    // Ignoring the conversation because there is more than one human
-    return callback(null, "");
-  }
+    .conversations(ConversationSid);
+  const webhooks = await conversation.webhooks.list();
+  const webhooksToRemove = webhooks.map((webhook) => webhook.remove());
+  await Promise.all(webhooksToRemove);
+  await conversation.webhooks.create({
+    target: "webhook",
+    "configuration.method": "POST",
+    "configuration.url": `https://${context.DOMAIN_NAME}/channels/conversations/messageAdded`,
+    "configuration.filters": ["onMessageAdded"],
+  });
 
   const token = await signRequest(context, event);
   const params = new URLSearchParams();
@@ -68,8 +54,8 @@ exports.handler = async function (context, event, callback) {
     params.append("_assistantIdentity", AssistantIdentity);
   }
   const body = {
-    body: event.Body,
-    identity: identity,
+    body: Body,
+    identity,
     session_id: `conversations__${ChatServiceSid}/${ConversationSid}`,
     // using a callback to handle AI Assistant responding
     webhook: `https://${
@@ -97,7 +83,7 @@ exports.handler = async function (context, event, callback) {
   try {
     const sendedMessage = await sendMessageToAssistant(
       context,
-      assistantSid,
+      AssistantSid,
       body
     );
     logger.info("SUCCESS", sendedMessage);
