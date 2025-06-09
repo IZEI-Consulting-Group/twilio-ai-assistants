@@ -9,7 +9,6 @@ const { readConversationAttributes } = require(Runtime.getAssets()["/utils.js"]
 
 /** @type {Logger} */
 const { TwilioLogger } = require(Runtime.getAssets()["/logger.js"].path);
-const services = require(Runtime.getAssets()["/services.json"].path);
 
 /**
  * @param {import('@twilio-labs/serverless-runtime-types/types').Context} context
@@ -21,13 +20,6 @@ exports.handler = async function (context, event, callback) {
     initialEvent: event,
   });
   logger.info("INIT");
-  logger.info("SERVICES", services);
-
-  const { identified_service: identifiedService } = event;
-  if (!identifiedService && !services.includes(identifiedService)) {
-    logger.error("IDENTIFIED_SERVICE_MISSING");
-    return callback(new Error("Missing identified service"));
-  }
 
   try {
     if (
