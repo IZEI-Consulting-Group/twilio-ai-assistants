@@ -67,7 +67,6 @@ exports.handler = async function (context, event, callback) {
     await Promise.all(configsConversation);
     logger.info("CONVERSATION_UPDATED", {
       flowSid,
-      message,
       identifiedService,
     });
 
