@@ -19,6 +19,7 @@ exports.handler = async function (context, event, callback) {
   const logger = new TwilioLogger(context, "STUDIO_HANDOVER", {
     initialEvent: event,
   });
+  const { request, ...attributes_ai_assistant } = event;
   logger.info("INIT");
 
   try {
@@ -57,7 +58,7 @@ exports.handler = async function (context, event, callback) {
     );
     const configsConversation = [
       conversation.update({
-        attributes: JSON.stringify({ ...attributes, identifiedService }),
+        attributes: JSON.stringify({ ...attributes, attributes_ai_assistant }),
       }),
       conversation.webhooks.create({
         target: "studio",
@@ -67,7 +68,7 @@ exports.handler = async function (context, event, callback) {
     await Promise.all(configsConversation);
     logger.info("CONVERSATION_UPDATED", {
       flowSid,
-      identifiedService,
+      attributes_ai_assistant,
     });
 
     const successMessage =
