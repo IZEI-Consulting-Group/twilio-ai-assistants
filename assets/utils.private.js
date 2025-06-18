@@ -131,10 +131,30 @@ function verifyRequest(context, event) {
   return false;
 }
 
+function extractBodyAndMeta(rawBody) {
+  const metaRegex = /<assistant-meta>(.+?)<\/assistant-meta>/s;
+  const match = rawBody.match(metaRegex);
+
+  let meta = null;
+  let body = rawBody;
+
+  if (match) {
+    try {
+      meta = JSON.parse(match[1]);
+    } catch {
+      meta = null;
+    }
+    body = rawBody.replace(metaRegex, "").trim();
+  }
+
+  return { body, meta };
+}
+
 module.exports = {
   getAssistantSid,
   signRequest,
   verifyRequest,
   sendMessageToAssistant,
   readConversationAttributes,
+  extractBodyAndMeta,
 };

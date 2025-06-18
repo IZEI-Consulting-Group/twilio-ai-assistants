@@ -7,6 +7,7 @@
 const {
   verifyRequest,
   readConversationAttributes,
+  extractBodyAndMeta,
 } = require(Runtime.getAssets()["/utils.js"].path);
 
 /** @type {Logger} */
@@ -23,31 +24,30 @@ exports.handler = async function (context, event, callback) {
   });
   logger.info("INIT");
 
+  const [serviceSid, conversationsSid] = event.SessionId.replace(
+    "webhook:conversations__",
+    ""
+  ).split("/");
+  const assistantIdentity =
+    typeof event._assistantIdentity === "string"
+      ? event._assistantIdentity
+      : undefined;
+
+  const client = context.getTwilioClient();
   try {
     if (!verifyRequest(context, event)) {
       logger.error("INVALID_TOKEN");
       return callback(new Error("Invalid token"));
     }
-    const assistantIdentity =
-      typeof event._assistantIdentity === "string"
-        ? event._assistantIdentity
-        : undefined;
 
-    if (event.Status === "Failed") {
+    if (event.Status === "Failed" || event.Status === "Failure") {
       logger.error("FAILED", { assistantIdentity });
-      return callback(
-        new Error("Failed to generate response. Check error logs.")
-      );
+
+      throw new Error("Failed to generate response. Check error logs.");
     }
 
-    const client = context.getTwilioClient();
-
-    const [serviceSid, conversationsSid] = event.SessionId.replace(
-      "webhook:conversations__",
-      ""
-    ).split("/");
-    const body = event.Body;
-    logger.info("VARIABLES", { serviceSid, conversationsSid, body });
+    const { body, meta } = extractBodyAndMeta(event.Body);
+    logger.info("VARIABLES", { serviceSid, conversationsSid, body, meta });
 
     const attributes = await readConversationAttributes(
       context,
@@ -61,19 +61,40 @@ exports.handler = async function (context, event, callback) {
         attributes: JSON.stringify({ ...attributes, assistantIsTyping: false }),
       });
 
+    const { contentSid, contentVariables } = meta || {};
     const message = await client.conversations.v1
       .services(serviceSid)
       .conversations(conversationsSid)
       .messages.create({
         body,
         author: assistantIdentity,
+        contentSid,
+        contentVariables,
+      })
+      .then(() => {
+        if (contentSid) {
+          return client.conversations.v1
+            .services(serviceSid)
+            .conversations(conversationsSid)
+            .messages.create({
+              body,
+              author: assistantIdentity,
+            });
+        }
       });
 
-    logger.info("SUCCESS", message);
+    logger.info("SUCCESS", { message, body, meta });
 
     return callback(null, {});
   } catch (err) {
+    await client.conversations.v1
+      .services(serviceSid)
+      .conversations(conversationsSid)
+      .messages.create({
+        body: "¡Uy! Parece que algo falló al procesar tu mensaje 😅\n\n¿Te parece si lo intentamos otra vez? Puedes repetir tu pregunta o escribirla de otra forma. ¡Estoy listo para ayudarte! 💬",
+        author: assistantIdentity,
+      });
     logger.error("ERROR", err);
-    return callback(null, {});
+    return callback(err);
   }
 };
