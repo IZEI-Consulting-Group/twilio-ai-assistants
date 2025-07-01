@@ -17,15 +17,20 @@ const { TwilioLogger } = require(Runtime.getAssets()["/logger.js"].path);
  */
 exports.handler = async function (context, event, callback) {
   const services = JSON.parse(Runtime.getAssets()["/services.json"].open());
+  const areas = JSON.parse(Runtime.getAssets()["/areas.json"].open());
   const logger = new TwilioLogger(context, "STUDIO_HANDOVER", {
     initialEvent: { ...event, services },
   });
   logger.info("INIT");
 
-  const { identified_service: identifiedService } = event;
+  const { identified_service: identifiedService, identified_area: identifiedArea } = event;
   if (!identifiedService || !services.includes(identifiedService)) {
     logger.error("IDENTIFIED_SERVICE_MISSING");
     return callback(new Error("Missing identified service"));
+  }
+  if (!identifiedArea || !areas.includes(identifiedArea)) {
+    logger.error("IDENTIFIED_AREA_MISSING");
+    return callback(new Error("Missing identified area"));
   }
 
   try {
@@ -64,7 +69,7 @@ exports.handler = async function (context, event, callback) {
     );
     const configsConversation = [
       conversation.update({
-        attributes: JSON.stringify({ ...attributes, identifiedService }),
+        attributes: JSON.stringify({ ...attributes, identifiedService, identifiedArea }),
       }),
       conversation.webhooks.create({
         target: "studio",
@@ -75,6 +80,7 @@ exports.handler = async function (context, event, callback) {
     logger.info("CONVERSATION_UPDATED", {
       flowSid,
       identifiedService,
+      identifiedArea
     });
 
     const successMessage =

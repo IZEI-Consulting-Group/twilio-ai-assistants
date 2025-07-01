@@ -24,7 +24,7 @@ exports.handler = async function (context, event, callback) {
   });
   logger.info("INIT");
 
-  const { ConversationSid, ChatServiceSid, Author, Body, AssistantSid } = event;
+  const { ConversationSid, ChatServiceSid, Author, Body, AssistantSid, InfoUser } = event;
   const AssistantIdentity =
     typeof event.AssistantIdentity === "string"
       ? event.AssistantIdentity
@@ -77,7 +77,7 @@ exports.handler = async function (context, event, callback) {
     .services(ChatServiceSid)
     .conversations(ConversationSid)
     .update({
-      attributes: JSON.stringify({ ...attributes, assistantIsTyping: true }),
+      attributes: JSON.stringify({ ...attributes, assistantIsTyping: true, infoUser: InfoUser }),
     });
 
   try {
