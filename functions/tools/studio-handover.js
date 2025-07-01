@@ -19,22 +19,21 @@ exports.handler = async function (context, event, callback) {
   const services = JSON.parse(Runtime.getAssets()["/services.json"].open());
   const areas = JSON.parse(Runtime.getAssets()["/areas.json"].open());
   const logger = new TwilioLogger(context, "STUDIO_HANDOVER", {
-    initialEvent: { ...event, services },
+    initialEvent: { ...event, services, areas },
   });
   logger.info("INIT");
 
-  async function sendWhatsAppMessage(to, body) {
+  async function sendWhatsAppMessage(to, contentSid) {
     const cleanTo = to.replace('whatsapp:', '');
-
-    const client = context.getTwilioClient();
     const from = `${context.TWILIO_WHATSAPP_NUMBER}`;
     const toWhatsApp = `whatsapp:${cleanTo}`;
+    const client = context.getTwilioClient();
 
     try {
       await client.messages.create({
         from,
         to: toWhatsApp,
-        body,
+        contentSid,
       });
     } catch (err) {
       logger.error("WHATSAPP_SEND_FAILED", err);
@@ -56,10 +55,7 @@ exports.handler = async function (context, event, callback) {
     logger.error("IDENTIFIED_SERVICE_MISSING");
 
     if (customerNumber) {
-      await sendWhatsAppMessage(
-        customerNumber,
-        "Lo sentimos, no se pudo identificar el servicio que solicitaste. Por favor intenta nuevamente o contacta a un agente."
-      );
+      await sendWhatsAppMessage(customerNumber, context.TEMPLATE_SERVICE_MISSING_SID);
     }
 
     return callback(new Error("Missing identified service"));
@@ -68,10 +64,7 @@ exports.handler = async function (context, event, callback) {
     logger.error("IDENTIFIED_AREA_MISSING");
 
     if (customerNumber) {
-      await sendWhatsAppMessage(
-        customerNumber,
-        "Lo sentimos, no se pudo identificar el área correspondiente. Por favor intenta nuevamente o contacta a un agente."
-      );
+      await sendWhatsAppMessage(customerNumber, context.TEMPLATE_AREA_MISSING_SID);
     }
 
     return callback(new Error("Missing identified area"));

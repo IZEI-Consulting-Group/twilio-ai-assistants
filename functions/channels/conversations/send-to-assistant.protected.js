@@ -58,9 +58,8 @@ exports.handler = async function (context, event, callback) {
     identity,
     session_id: `conversations__${ChatServiceSid}/${ConversationSid}`,
     // using a callback to handle AI Assistant responding
-    webhook: `https://${
-      context.DOMAIN_NAME
-    }/channels/conversations/response?${params.toString()}`,
+    webhook: `https://${context.DOMAIN_NAME
+      }/channels/conversations/response?${params.toString()}`,
   };
   logger.info("REQUEST", body);
 
@@ -77,7 +76,7 @@ exports.handler = async function (context, event, callback) {
     .services(ChatServiceSid)
     .conversations(ConversationSid)
     .update({
-      attributes: JSON.stringify({ ...attributes, assistantIsTyping: true, infoUser: JSON.parse(InfoUser) }),
+      attributes: JSON.stringify({ ...attributes, assistantIsTyping: true, infoUser: JSON.parse(InfoUser) ?? {} }),
     });
 
   try {

@@ -11,5 +11,5 @@
       "env": ".env.dev"
     }
   },
-  "runtime": "node18"
+  "runtime": "node20"
 }

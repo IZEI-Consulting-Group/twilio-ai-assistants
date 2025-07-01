@@ -38,6 +38,9 @@ exports.handler = async function (context, event, callback) {
       identifiedService: undefined,
       identifiedArea: undefined,
     };
+
+    const client = context.getTwilioClient();
+
     await client.conversations.v1
       .services(ChatServiceSid)
       .conversations(ConversationSid)
