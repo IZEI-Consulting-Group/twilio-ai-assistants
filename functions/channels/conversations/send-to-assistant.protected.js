@@ -77,7 +77,7 @@ exports.handler = async function (context, event, callback) {
     .services(ChatServiceSid)
     .conversations(ConversationSid)
     .update({
-      attributes: JSON.stringify({ ...attributes, assistantIsTyping: true, infoUser: InfoUser }),
+      attributes: JSON.stringify({ ...attributes, assistantIsTyping: true, infoUser: JSON.parse(InfoUser) }),
     });
 
   try {
