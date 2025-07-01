@@ -23,13 +23,57 @@ exports.handler = async function (context, event, callback) {
   });
   logger.info("INIT");
 
+  async function sendWhatsAppMessage(to, body) {
+    const cleanTo = to.replace('whatsapp:', '');
+
+    const client = context.getTwilioClient();
+    const from = `${context.TWILIO_WHATSAPP_NUMBER}`;
+    const toWhatsApp = `whatsapp:${cleanTo}`;
+
+    try {
+      await client.messages.create({
+        from,
+        to: toWhatsApp,
+        body,
+      });
+    } catch (err) {
+      logger.error("WHATSAPP_SEND_FAILED", err);
+    }
+  }
+
+  let customerNumber = null;
+  try {
+    const parsedAttributes = JSON.parse(event.TaskAttributes || '{}');
+    customerNumber =
+      (parsedAttributes.customerAddress || parsedAttributes.customers?.phone || '').replace('whatsapp:', '');
+    logger.info("CUSTOMER_NUMBER", customerNumber);
+  } catch (err) {
+    logger.warn("CANNOT_PARSE_CUSTOMER_NUMBER", err);
+  }
+
   const { identified_service: identifiedService, identified_area: identifiedArea } = event;
   if (!identifiedService || !services.includes(identifiedService)) {
     logger.error("IDENTIFIED_SERVICE_MISSING");
+
+    if (customerNumber) {
+      await sendWhatsAppMessage(
+        customerNumber,
+        "Lo sentimos, no se pudo identificar el servicio que solicitaste. Por favor intenta nuevamente o contacta a un agente."
+      );
+    }
+
     return callback(new Error("Missing identified service"));
   }
   if (!identifiedArea || !areas.includes(identifiedArea)) {
     logger.error("IDENTIFIED_AREA_MISSING");
+
+    if (customerNumber) {
+      await sendWhatsAppMessage(
+        customerNumber,
+        "Lo sentimos, no se pudo identificar el área correspondiente. Por favor intenta nuevamente o contacta a un agente."
+      );
+    }
+
     return callback(new Error("Missing identified area"));
   }
 
