@@ -1,16 +1,31 @@
 /**
+ * @typedef {import('../../assets/utils.private')} Utils
+ * @typedef {import('../../assets/logger.private')} Logger
+ */
+
+/** @type {Logger} */
+const { TwilioLogger } = require(Runtime.getAssets()["/logger.js"].path);
+
+/**
  * @param {import('@twilio-labs/serverless-runtime-types/types').Context} context
  * @param {{}} event
  * @param {import('@twilio-labs/serverless-runtime-types/types').ServerlessCallback} callback
  */
 exports.handler = async function (context, event, callback) {
+  const logger = new TwilioLogger(context, "FLEX_HANDOVER", {
+    initialEvent: event,
+  });
+  logger.info("INIT");
   const client = context.getTwilioClient();
 
   const FLEX_WORKFLOW_SID = event.FlexWorkflowSid || context.FLEX_WORKFLOW_SID;
   const FLEX_WORKSPACE_SID =
     event.FlexWorkspaceSid || context.FLEX_WORKSPACE_SID;
+  const TWILIO_PHONE_NUMBER =
+    event.TwilioPhoneNumber || context.TWILIO_PHONE_NUMBER;
 
   if (!FLEX_WORKFLOW_SID || !FLEX_WORKSPACE_SID) {
+    logger.error("FLEX_MISSING", { FLEX_WORKFLOW_SID, FLEX_WORKSPACE_SID });
     return callback(
       new Error(
         "Missing configuration for FLEX_WORKSPACE_SID OR FLEX_WORKFLOW_SID"
@@ -24,9 +39,18 @@ exports.handler = async function (context, event, callback) {
   const [traitName, identity] = event.request.headers["x-identity"]?.split(":");
 
   if (!identity || !conversationsSid) {
+    logger.error("INVALID_REQUEST", { traitName, identity });
     return callback(new Error("Invalid request"));
   }
 
+  let region = "";
+  if (identity.startsWith("+5281") || identity.startsWith("+52181"))
+    region = "norte";
+  if (identity.startsWith("+5255") || identity.startsWith("+52155"))
+    region = "centro";
+  if (identity.startsWith("+5256") || identity.startsWith("+52156"))
+    region = "centro";
+  logger.info("IDENTITY", { traitName, identity, region });
   try {
     let from = identity;
     let customerName = identity;
@@ -47,18 +71,32 @@ exports.handler = async function (context, event, callback) {
       customerName = from;
       customerAddress = from;
       try {
-        const user = await client.conversations.users(identity).fetch();
+        const user = await client.conversations.v1.users(identity).fetch();
         from = user.friendlyName;
       } catch (err) {
-        console.error(err);
+        logger.error("USER_FETCH", err);
       }
     }
+
+    const to = `whatsapp:${TWILIO_PHONE_NUMBER}`;
+    logger.info("CHANNEL", {
+      channelType,
+      conversationsSid,
+      from,
+      to,
+      customerName,
+      customerAddress,
+    });
     const result = await client.flexApi.v1.interaction.create({
       channel: {
         type: channelType,
         initiated_by: "customer",
         properties: {
           media_channel_sid: conversationsSid,
+        },
+        participants: {
+          address: from,
+          proxy_address: to,
         },
       },
       routing: {
@@ -67,16 +105,17 @@ exports.handler = async function (context, event, callback) {
           workflow_sid: FLEX_WORKFLOW_SID,
           task_channel_unique_name: "chat",
           attributes: {
-            from: from,
-            customerName: customerName,
-            customerAddress: customerAddress,
+            from,
+            customerName,
+            customerAddress,
+            region,
           },
         },
       },
     });
-    console.log(result.sid);
+    logger.info("RESULT", { sid: result.sid });
   } catch (err) {
-    console.error(err);
+    logger.error("ERROR", err);
     return callback(new Error("Failed to hand over to a human agent"));
   }
 
