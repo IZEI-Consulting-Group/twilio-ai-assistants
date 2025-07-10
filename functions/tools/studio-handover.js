@@ -50,23 +50,21 @@ exports.handler = async function (context, event, callback) {
     logger.warn("CANNOT_PARSE_CUSTOMER_NUMBER", err);
   }
 
-  const { identified_service: identifiedService, identified_area: identifiedArea } = event;
+  const { identified_service: identifiedService, identified_area: identifiedArea, has_various_services: hasVariousServices } = event;
+  
   if (!identifiedService || !services.includes(identifiedService)) {
     logger.error("IDENTIFIED_SERVICE_MISSING");
-
     if (customerNumber) {
       await sendWhatsAppMessage(customerNumber, context.TEMPLATE_SERVICE_MISSING_SID);
     }
-
     return callback(new Error("Missing identified service"));
   }
+
   if (!identifiedArea || !areas.includes(identifiedArea)) {
     logger.error("IDENTIFIED_AREA_MISSING");
-
     if (customerNumber) {
       await sendWhatsAppMessage(customerNumber, context.TEMPLATE_AREA_MISSING_SID);
     }
-
     return callback(new Error("Missing identified area"));
   }
 
@@ -106,7 +104,7 @@ exports.handler = async function (context, event, callback) {
     );
     const configsConversation = [
       conversation.update({
-        attributes: JSON.stringify({ ...attributes, identifiedService, identifiedArea }),
+        attributes: JSON.stringify({ ...attributes, identifiedService, identifiedArea, hasVariousServices }),
       }),
       conversation.webhooks.create({
         target: "studio",
@@ -117,7 +115,8 @@ exports.handler = async function (context, event, callback) {
     logger.info("CONVERSATION_UPDATED", {
       flowSid,
       identifiedService,
-      identifiedArea
+      identifiedArea,
+      hasVariousServices
     });
 
     const successMessage =
