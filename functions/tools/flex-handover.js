@@ -32,7 +32,7 @@ exports.handler = async function (context, event, callback) {
   }
 
   const [serviceSid, conversationsSid] = event.request.headers["x-session-id"]
-    ?.replace("conversations__", "")
+    ?.replace("webhook:conversations__", "")
     .split("/");
   const [traitName, identity] = event.request.headers["x-identity"]?.split(":");
 
@@ -48,7 +48,13 @@ exports.handler = async function (context, event, callback) {
     region = "centro";
   if (identity.startsWith("+5256") || identity.startsWith("+52156"))
     region = "centro";
-  logger.info("IDENTITY", { traitName, identity, region });
+  logger.info("IDENTITY", {
+    traitName,
+    identity,
+    region,
+    serviceSid,
+    conversationsSid,
+  });
   let conversation = null;
   try {
     let from = identity;
@@ -112,7 +118,8 @@ exports.handler = async function (context, event, callback) {
     );
     logger.info("RESULT", { sid: result.sid });
   } catch (err) {
-    if (conversation) {
+    logger.error("ERROR", err);
+    if (conversation?.fetch) {
       await conversation.messages.create({
         author: "Twilio AI Assistant",
         body: "🫨 Ups! Hubo un *error al transferirte* a un asesor.\n\n_Intenta de nuevo mas tarde._",
@@ -124,7 +131,6 @@ exports.handler = async function (context, event, callback) {
         "configuration.filters": ["onMessageAdded"],
       });
     }
-    logger.error("ERROR", err);
     return callback(new Error("Failed to hand over to a human agent"));
   }
 
