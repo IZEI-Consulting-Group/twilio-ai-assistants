@@ -31,7 +31,7 @@ exports.handler = async function (context, event, callback) {
   const assistantIdentity =
     typeof event._assistantIdentity === "string"
       ? event._assistantIdentity
-      : undefined;
+      : "Twilio AI Assistant";
 
   const client = context.getTwilioClient();
   try {
