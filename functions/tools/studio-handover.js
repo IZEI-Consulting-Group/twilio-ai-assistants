@@ -51,13 +51,38 @@ exports.handler = async function (context, event, callback) {
   }
 
   const { identified_service: identifiedService, identified_area: identifiedArea, has_various_services: hasVariousServices } = event;
-  
-  if (!identifiedService || !services.includes(identifiedService)) {
-    logger.error("IDENTIFIED_SERVICE_MISSING");
+
+  let identifiedServicesArray = [];
+
+  if (identifiedService) {
+    if (Array.isArray(identifiedService)) {
+      identifiedServicesArray = identifiedService;
+    } else if (typeof identifiedService === "string") {
+      identifiedServicesArray = identifiedService
+        .split(",")
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+    }
+  }
+
+  // Validar contra services.json (case-insensitive)
+  const validServices = identifiedServicesArray.filter(svc =>
+    services.some(valid => valid.toLowerCase() === svc.toLowerCase())
+  );
+
+  logger.info("SERVICES_DEBUG", {
+    input: identifiedService,
+    parsed: identifiedServicesArray,
+    validServices,
+    allValidOptions: services,
+  });
+
+  if (!validServices.length) {
+    logger.error("IDENTIFIED_SERVICE_MISSING", { identifiedService, validServices });
     if (customerNumber) {
       await sendWhatsAppMessage(customerNumber, context.TEMPLATE_SERVICE_MISSING_SID);
     }
-    return callback(new Error("Missing identified service"));
+    return callback(new Error("Missing or invalid identified service(s)"));
   }
 
   if (!identifiedArea || !areas.includes(identifiedArea)) {
@@ -104,7 +129,12 @@ exports.handler = async function (context, event, callback) {
     );
     const configsConversation = [
       conversation.update({
-        attributes: JSON.stringify({ ...attributes, identifiedService, identifiedArea, hasVariousServices }),
+        attributes: JSON.stringify({
+          ...attributes,
+          identifiedService: identifiedServicesArray,
+          identifiedArea,
+          hasVariousServices
+        }),
       }),
       conversation.webhooks.create({
         target: "studio",
