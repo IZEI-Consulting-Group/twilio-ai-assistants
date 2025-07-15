@@ -52,6 +52,7 @@ exports.handler = async function (context, event, callback) {
 
   const { identified_service: identifiedService, identified_area: identifiedArea, has_various_services: hasVariousServices } = event;
 
+  // Extracción de servicios múltiples o únicos
   let identifiedServicesArray = [];
 
   if (identifiedService) {
@@ -85,12 +86,38 @@ exports.handler = async function (context, event, callback) {
     return callback(new Error("Missing or invalid identified service(s)"));
   }
 
-  if (!identifiedArea || !areas.includes(identifiedArea)) {
-    logger.error("IDENTIFIED_AREA_MISSING");
+  // Extracción de áreas múltiples o únicas
+  let identifiedAreasArray = [];
+
+  if (identifiedArea) {
+    if (Array.isArray(identifiedArea)) {
+      identifiedAreasArray = identifiedArea.map(a => a.trim());
+    } else if (typeof identifiedArea === "string") {
+      identifiedAreasArray = identifiedArea
+        .split(",")
+        .map(a => a.trim())
+        .filter(a => a.length > 0);
+    }
+  }
+
+  // Validar contra areas.json (case-insensitive)
+  const validAreas = identifiedAreasArray.filter(area =>
+    areas.some(valid => valid.toLowerCase() === area.toLowerCase())
+  );
+
+  logger.info("AREAS_DEBUG", {
+    input: identifiedArea,
+    parsed: identifiedAreasArray,
+    validAreas,
+    allValidOptions: areas,
+  });
+
+  if (!validAreas.length) {
+    logger.error("IDENTIFIED_AREA_MISSING", { identifiedArea, validAreas });
     if (customerNumber) {
       await sendWhatsAppMessage(customerNumber, context.TEMPLATE_AREA_MISSING_SID);
     }
-    return callback(new Error("Missing identified area"));
+    return callback(new Error("Missing or invalid identified area(s)"));
   }
 
   try {
@@ -132,7 +159,7 @@ exports.handler = async function (context, event, callback) {
         attributes: JSON.stringify({
           ...attributes,
           identifiedService: identifiedServicesArray,
-          identifiedArea,
+          identifiedArea: identifiedAreasArray,
           hasVariousServices
         }),
       }),
